@@ -20,7 +20,7 @@ This plugin uses the following tools : awk, bc, grep, wget
 
 =head1 CONFIGURATION
 For this plugin to work, you need to set the password to the web interface of 
-the freebox (http://mafreebox.freebox.fr) in the file /etc/munin/plugin-conf.d/
+the freebox (http://mafreebox.freebox.fr) in the file /etc/munin/plugin-conf.d/freebox.conf
     [freebox_*]
         env.password secret
 
