@@ -123,7 +123,7 @@ function get_status {
   # This information is parsed from the settings first tab, in the span with
   # the id "conn_state".
   #----------------------------------------------------------------------------
-  get_page "http://mafreebox.freebox.fr/settings.php"
+  get_page "http://mafreebox.freebox.fr/settings.php?page=conn_status"
     
   CONN_STATE=$(grep "conn_state" $HTML_OUT|awk -F "[<>]" {'print $5'})
   if [[ ! -z $CONN_STATE && $CONN_STATE == "Connecté" ]]; then
