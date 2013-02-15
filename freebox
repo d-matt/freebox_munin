@@ -7,7 +7,7 @@ Freebox munin plugin to monitor the freebox v6 server (Revolution) from the fren
 
 =head1 DESCRIPTION
 
-This plugin monitors various aspects of the freebox server : 
+This plugin monitors various aspects of the freebox server:
  * The connexion status
  * the uptime
  * the temperature of the chips
@@ -16,10 +16,11 @@ This plugin monitors various aspects of the freebox server :
  * the SNR margin
  * the line attenuation
 
-This plugin uses the following tools : awk, bc, grep, wget
+This plugin uses the following tools: awk, bc, grep, wget
 
 =head1 CONFIGURATION
-For this plugin to work, you need to set the password to the web interface of 
+
+For this plugin to work, you need to set the password to the web interface of
 the freebox (http://mafreebox.freebox.fr) in the file /etc/munin/plugin-conf.d/freebox.conf
     [freebox_*]
         env.password secret
@@ -34,7 +35,7 @@ GPLv2
 
 =head1 CONTRIBUTE
 
-find this plugin on github at http://github.com/d-matt/freebox_munin
+Find this plugin on github at http://github.com/d-matt/freebox_munin
 
 =head1 VERSION
 
@@ -48,7 +49,7 @@ find this plugin on github at http://github.com/d-matt/freebox_munin
 
 =cut
 
-#MONITOR can only be status, uptime, temp, fan, attenuation, atm or snr 
+#MONITOR can only be status, uptime, temp, fan, attenuation, atm or snr
 MONITOR=`basename $0 | sed 's/^freebox_//g'`
 
 HTML_OUT="/tmp/freebox.html"
@@ -57,14 +58,14 @@ WGET_CMD="wget -q --tries=1 --timeout=2 --output-document=$HTML_OUT"
 
 function identification {
   #----------------------------------------------------------------------------
-  # This function tries to connect to the freebox web interface. 
-  # The login page provide a authentification form which is posted 
-  # with wget and the authtification cookie is stored on the filesystem. 
+  # This function tries to connect to the freebox web interface.
+  # The login page provide a authentication form which is posted
+  # with wget and the authentication cookie is stored on the filesystem.
   #
   # Exit if the password is incorrect
   #----------------------------------------------------------------------------
 
-  #Try to authentificate
+  #Try to authenticate
   $($WGET_CMD \
     --save-cookies=/tmp/free_cookies.txt \
     --post-data="login=freebox&passwd=$password" \
@@ -72,7 +73,7 @@ function identification {
 
   if grep -q "bad-pass" $HTML_OUT
   then
-    #Bad password -> exit 
+    #Bad password -> exit
     exit 1
   fi
 
@@ -80,14 +81,14 @@ function identification {
 
 function get_page {
   #----------------------------------------------------------------------------
-  # This function fetch a page from the freebox web interface. The URL of the 
-  # page must be given as a parameter. 
+  # This function fetch a page from the freebox web interface. The URL of the
+  # page must be given as a parameter.
   #
-  # If the session doesn't exist or is invalid on the freebox server, wget 
-  # will at first get the identification form with an error message  
+  # If the session doesn't exist or is invalid on the freebox server, wget
+  # will at first get the identification form with an error message
   #   -> call identification function, then retry to download the page
   #
-  # If the freebox is down, wget will exit with an error code (>0). If so, this 
+  # If the freebox is down, wget will exit with an error code (>0). If so, this
   # function will also exit with an error code.
   #----------------------------------------------------------------------------
   local SUCCESS=false
@@ -116,7 +117,7 @@ function get_page {
 
 function get_status {
   #----------------------------------------------------------------------------
-  # Check the adsl status of the freebox : 
+  # Check the adsl status of the freebox :
   #   - 1, if connected to the internet
   #   - 0, otherwise
   #
@@ -124,7 +125,7 @@ function get_status {
   # the id "conn_state".
   #----------------------------------------------------------------------------
   get_page "http://mafreebox.freebox.fr/settings.php?page=conn_status"
-    
+
   CONN_STATE=$(grep "conn_state" $HTML_OUT|awk -F "[<>]" {'print $5'})
   if [[ ! -z $CONN_STATE && $CONN_STATE == "Connecté" ]]; then
     CONN_STATE=1;
@@ -137,13 +138,13 @@ function get_status {
 
 function get_uptime {
   #----------------------------------------------------------------------------
-  # Get the uptime of the freebox server. 
-  # 
-  # This information is parsed from the "Système" tab of the settings page, in 
-  # the <span> element after "Allumée depuis :". The format is 
+  # Get the uptime of the freebox server.
+  #
+  # This information is parsed from the "Système" tab of the settings page, in
+  # the <span> element after "Allumée depuis :". The format is
   #   xx jour xx heures xx minutes xx secondes
-  # 
-  # This function outputs the uptime in days  
+  #
+  # This function outputs the uptime in days
   #----------------------------------------------------------------------------
   get_page "http://mafreebox.freebox.fr/settings.php?page=misc_system"
 
@@ -174,13 +175,13 @@ function get_uptime {
 
 function get_temperature {
   #----------------------------------------------------------------------------
-  # Get the temperature of the chips in the freebox. 
+  # Get the temperature of the chips in the freebox.
   # This information is parsed from the "Système" tab of the settings page.
   #
   # CPUm : Marvell 88F6281 (http://www.marvell.com//embedded-processors/kirkwood/assets/HW_88F6281_OpenSource.pdf)
   # CPUb : Broadcom BCM6368 (for adsl) http://www.broadcom.com/products/Broadband-Carrier-Access/xDSL-CPE-Solutions/BCM6368
-  # SW   : Marvell switch 
-  # 
+  # SW   : Marvell switch
+  #
   # This function outputs the various temperature in degree celsius
   #----------------------------------------------------------------------------
   get_page "http://mafreebox.freebox.fr/settings.php?page=misc_system"
@@ -200,7 +201,7 @@ function get_fanspeed {
   #
   # This information is parsed from the "Système" tab of the settings page, in
   # the <span> element after "Vitesse ventilateur :".
-  # 
+  #
   # This function outputs the value in RPM.
   #----------------------------------------------------------------------------
   get_page "http://mafreebox.freebox.fr/settings.php?page=misc_system"
@@ -216,17 +217,17 @@ function get_fanspeed {
 
 function get_atm_bandwidth {
   #----------------------------------------------------------------------------
-  # Get the ATM bandwidth in kbit/s. 
-  # 
-  # This information is parsed from the "ADSL > Statistiques" tab from the 
+  # Get the ATM bandwidth in kbit/s.
+  #
+  # This information is parsed from the "ADSL > Statistiques" tab from the
   # following html structure :
-  #  
+  #
   #   <tr>
   #     <th>Débit ATM</th>
   #     <td>[0-9]+ kbit/s</td>
   #     <td>[0-9]+ kbit/s</td>
-  # 
-  # -> The download value is obained with the first match of "kbit/s" on the 
+  #
+  # -> The download value is obained with the first match of "kbit/s" on the
   #    page
   # -> The upload value is obtained with the second match
   #----------------------------------------------------------------------------
@@ -239,7 +240,7 @@ function get_atm_bandwidth {
 
 function get_attenuation {
   #----------------------------------------------------------------------------
-  # Get the line attenuation in dB. 
+  # Get the line attenuation in dB.
   #
   # This information is parsed from the "ADSL > Statistiques" tab from the
   # following html structure :
@@ -351,7 +352,7 @@ if [ "$1" = "config" ]; then
       printf "ERROR : Monitor can only be status, uptime, temp or fan\n"
       exit 1;
       ;;
-  esac    
+  esac
   exit 0
 fi;
 
