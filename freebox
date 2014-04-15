@@ -10,13 +10,11 @@ Freebox munin plugin to monitor the freebox v6 server (Revolution) from the fren
 This plugin monitors various aspects of the freebox server:
  * The connexion status
  * the uptime
- * the temperature of the chips
- * the fan rotationnal speed
  * the ATM synchronization bandwidth
  * the SNR margin
  * the line attenuation
 
-This plugin uses the following tools: awk, bc, grep, wget
+This plugin uses the following tools: awk, bc, grep, curl
 
 =head1 CONFIGURATION
 
@@ -52,67 +50,28 @@ Find this plugin on github at http://github.com/d-matt/freebox_munin
 #MONITOR can only be status, uptime, temp, fan, attenuation, atm or snr
 MONITOR=`basename $0 | sed 's/^freebox_//g'`
 
-HTML_OUT="/tmp/freebox.html"
-
-WGET_CMD="wget -q --tries=1 --timeout=2 --output-document=$HTML_OUT"
-
-function identification {
-  #----------------------------------------------------------------------------
-  # This function tries to connect to the freebox web interface.
-  # The login page provide a authentication form which is posted
-  # with wget and the authentication cookie is stored on the filesystem.
-  #
-  # Exit if the password is incorrect
-  #----------------------------------------------------------------------------
-
-  #Try to authenticate
-  $($WGET_CMD \
-    --save-cookies=/tmp/free_cookies.txt \
-    --post-data="login=freebox&passwd=$password" \
-    "http://mafreebox.freebox.fr/login.php")
-
-  if grep -q "bad-pass" $HTML_OUT
-  then
-    #Bad password -> exit
-    exit 1
-  fi
-
-}
+FREEBOX_URL="http://mafreebox.freebox.fr/pub/fbx_info.txt"
 
 function get_page {
   #----------------------------------------------------------------------------
-  # This function fetch a page from the freebox web interface. The URL of the
-  # page must be given as a parameter.
-  #
-  # If the session doesn't exist or is invalid on the freebox server, wget
-  # will at first get the identification form with an error message
-  #   -> call identification function, then retry to download the page
+  # This function fetch the page from the freebox web interface.
   #
   # If the freebox is down, wget will exit with an error code (>0). If so, this
   # function will also exit with an error code.
   #----------------------------------------------------------------------------
-  local SUCCESS=false
-  while ! $SUCCESS ; do
-    $($WGET_CMD \
-      --load-cookies=/tmp/free_cookies.txt \
-      $1)
 
-    # Make sure the connexion is OK.
-    WGET_STATUS=$?
-    if [ $WGET_STATUS -ne 0 ]
-    then
-      # wget had problems.
-      # Stop there, because the freebox is probably offline
-      exit 1
-    fi
+  curl -s $FREEBOX_URL | \
+  iconv -f iso-8859-1 -t utf-8
 
-    if grep -q "bad-pass" $HTML_OUT
-    then
-      identification
-    else
-      SUCCESS=true
-    fi
-  done
+  # Make sure the connexion is OK.
+  WGET_STATUS=$?
+  if [ $WGET_STATUS -ne 0 ]
+  then
+    # wget had problems.
+    # Stop there, because the freebox is probably offline
+    exit 1
+  fi
+
 }
 
 function get_status {
@@ -124,16 +83,33 @@ function get_status {
   # This information is parsed from the settings first tab, in the span with
   # the id "conn_state".
   #----------------------------------------------------------------------------
-  get_page "http://mafreebox.freebox.fr/settings.php?page=conn_status"
-
-  CONN_STATE=$(grep "conn_state" $HTML_OUT|awk -F "[<>]" {'print $5'})
-  if [[ ! -z $CONN_STATE && $CONN_STATE == "Connecté" ]]; then
+  CONN_STATE=$(get_page|awk '/Etat *Ok/{print $2}/Adsl/{exit}')
+  if [[ ! -z "$CONN_STATE" && "$CONN_STATE" == "Ok" ]]; then
     CONN_STATE=1;
   else
     CONN_STATE=0;
   fi
 
   printf "status.value $CONN_STATE\n"
+}
+
+function get_phone_status {
+  #----------------------------------------------------------------------------
+  # Check the phone status of the freebox :
+  #   - 1, if connected to the internet
+  #   - 0, otherwise
+  #
+  # This information is parsed from the settings first tab, in the span with
+  # the id "conn_state".
+  #----------------------------------------------------------------------------
+  CONN_STATE=$(get_page|awk '/Etat du /{print $4}')
+  if [[ ! -z $CONN_STATE && $CONN_STATE == "Raccroché" ]]; then
+    CONN_STATE=0;
+  else
+    CONN_STATE=1;
+  fi
+
+  printf "phone.value $CONN_STATE\n"
 }
 
 function get_uptime {
@@ -146,9 +122,7 @@ function get_uptime {
   #
   # This function outputs the uptime in days
   #----------------------------------------------------------------------------
-  get_page "http://mafreebox.freebox.fr/settings.php?page=misc_system"
-
-  UPTIME=$( grep "Allumée depuis" $HTML_OUT | awk -F "[<>]" {'print $5'} )
+  UPTIME=$( get_page | awk '/Temps depuis la mise en route/{print $7, $8, $9, $10, $11, $12}' )
 
   local DAY=$(echo "$UPTIME" | grep -oP '\K[0-9]+(?= jour)' )
   local HOU=$(echo "$UPTIME" | grep -oP '\K[0-9]+(?= heure)' )
@@ -173,48 +147,6 @@ function get_uptime {
   printf "uptime.value $UPTIME\n"
 }
 
-function get_temperature {
-  #----------------------------------------------------------------------------
-  # Get the temperature of the chips in the freebox.
-  # This information is parsed from the "Système" tab of the settings page.
-  #
-  # CPUm : Marvell 88F6281 (http://www.marvell.com//embedded-processors/kirkwood/assets/HW_88F6281_OpenSource.pdf)
-  # CPUb : Broadcom BCM6368 (for adsl) http://www.broadcom.com/products/Broadband-Carrier-Access/xDSL-CPE-Solutions/BCM6368
-  # SW   : Marvell switch
-  #
-  # This function outputs the various temperature in degree celsius
-  #----------------------------------------------------------------------------
-  get_page "http://mafreebox.freebox.fr/settings.php?page=misc_system"
-
-  TCPUM=$(   grep "Température CPUm" $HTML_OUT   | grep -oP '\K[0-9]+(?= °C)' )
-  TCPUB=$(   grep "Température CPUb" $HTML_OUT   | grep -oP '\K[0-9]+(?= °C)' )
-  TSW=$(     grep "Température SW"   $HTML_OUT   | grep -oP '\K[0-9]+(?= °C)' )
-
-  printf "tcpum.value $TCPUM\n"
-  printf "tcpub.value $TCPUB\n"
-  printf "tsw.value $TSW\n"
-}
-
-function get_fanspeed {
-  #----------------------------------------------------------------------------
-  # Get the fan rotationnal speed of the freebox server.
-  #
-  # This information is parsed from the "Système" tab of the settings page, in
-  # the <span> element after "Vitesse ventilateur :".
-  #
-  # This function outputs the value in RPM.
-  #----------------------------------------------------------------------------
-  get_page "http://mafreebox.freebox.fr/settings.php?page=misc_system"
-
-  FANSPEED=$(grep "Vitesse ventilateur" $HTML_OUT| grep -oP '\K[0-9]+(?= RPM)')
-
-  if [ -z $FANSPEED ]; then
-    FANSPEED="0"
-  fi
-
-  printf "fan.value $FANSPEED\n"
-}
-
 function get_atm_bandwidth {
   #----------------------------------------------------------------------------
   # Get the ATM bandwidth in kbit/s.
@@ -231,11 +163,7 @@ function get_atm_bandwidth {
   #    page
   # -> The upload value is obtained with the second match
   #----------------------------------------------------------------------------
-  get_page "http://mafreebox.freebox.fr/settings.php?page=conn_dsl_stats"
-
-  grep -oP '\K[0-9]+(?= kbit/s)' $HTML_OUT |awk 'NR==1 {print "atm_down.value " $1}'
-  grep -oP '\K[0-9]+(?= kbit/s)' $HTML_OUT |awk 'NR==2 {print "atm_up.value " $1}'
-
+  get_page | awk '$2 == "ATM" { down_atm=$3*1024; up_atm=$5*1024; print "atm_down.value", down_atm; print "atm_up.value", up_atm; }'
 }
 
 function get_attenuation {
@@ -260,10 +188,7 @@ function get_attenuation {
   #    page
   # -> The upload value is obtained with the second match
   #----------------------------------------------------------------------------
-  get_page "http://mafreebox.freebox.fr/settings.php?page=conn_dsl_stats"
-
-  grep -oP '\K[0-9]+(?= dB)' $HTML_OUT |awk 'NR==1 {print "attenuation_down.value " $1}'
-  grep -oP '\K[0-9]+(?= dB)' $HTML_OUT |awk 'NR==2 {print "attenuation_up.value " $1}'
+  get_page | awk '$1 == "Atténuation" { down_attn=$2; up_attn=$4; print "attenuation_down.value", down_attn; print "attenuation_up.value", up_attn; }'
 }
 
 function get_SNR_margin {
@@ -287,10 +212,7 @@ function get_SNR_margin {
   #    page
   # -> The upload value is obtained with the fourth match
   #----------------------------------------------------------------------------
-  get_page "http://mafreebox.freebox.fr/settings.php?page=conn_dsl_stats"
-
-  grep -oP '\K[0-9]+(?= dB)' $HTML_OUT |awk 'NR==3 {print "snr_down.value " $1}'
-  grep -oP '\K[0-9]+(?= dB)' $HTML_OUT |awk 'NR==4 {print "snr_up.value " $1}'
+  get_page | awk '$1 == "Marge" { down_snr=$4; up_snr=$6; print "snr_down.value", down_snr; print "snr_up.value", up_snr; }'
 }
 
 
@@ -313,19 +235,12 @@ if [ "$1" = "config" ]; then
       printf "graph_info This graph shows the uptime of the freebox server.\n"
       printf "$MONITOR.draw AREA\n"
       ;;
-    temp)
-      printf "graph_title Freebox temperatures\n"
-      printf "graph_info This graph shows the temperatures of the freebox server.\n"
-      printf "graph_vlabel Temp in °C\n"
-      printf "tcpum.label Temp CPUm\n"
-      printf "tcpub.label Temp CPUb\n"
-      printf "tsw.label Temp SW\n"
-      ;;
-    fan)
-      printf "graph_title Freebox fan speed\n"
-      printf "graph_info This graph shows the fan rotationnal speed of the freebox server.\n"
-      printf "$MONITOR.label fan speed\n"
-      printf "graph_vlabel fan speed (RPM)\n"
+    phone)
+      printf "graph_title Freebox phone\n"
+      printf "$MONITOR.label $MONITOR\n"
+      printf "graph_vlabel $MONITOR\n"
+      printf "graph_info This graph shows the status of the phone.\n"
+      printf "$MONITOR.draw AREA\n"
       ;;
     atm)
       printf "graph_title Freebox ATM Bandwidth (Up and Down)\n"
@@ -363,11 +278,8 @@ case "$MONITOR" in
   uptime)
     get_uptime
     ;;
-  temp)
-    get_temperature
-    ;;
-  fan)
-    get_fanspeed
+  phone)
+    get_phone_status
     ;;
   atm)
     get_atm_bandwidth
