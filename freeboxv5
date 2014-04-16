@@ -28,7 +28,11 @@ the freebox (http://mafreebox.freebox.fr) in the file /etc/munin/plugin-conf.d/f
 
 =head1 AUTHOR
 
-d-matt
+Guilhem Bonnefille <guilhem.bonnefille@gmail.com>
+
+Inspired by:
+* d-matt https://github.com/d-matt/freebox_munin
+* GLR http://glr81.free.fr/blog/index.php?2013/10/12/73-freebox-5-adsl-stats-cacti-templates
 
 =head1 LICENSE
 
