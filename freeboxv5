@@ -53,7 +53,7 @@ Find this plugin on github at http://github.com/d-matt/freebox_munin
 
 =cut
 
-#MONITOR can only be status, uptime, temp, fan, attenuation, atm or snr
+#MONITOR is extracted from file's name
 MONITOR=`basename $0 | sed 's/^freeboxv5_//g'`
 
 FREEBOX_URL="http://mafreebox.freebox.fr/pub/fbx_info.txt"
@@ -339,7 +339,7 @@ case "$MONITOR" in
     get_crc
     ;;
   *)
-    printf "ERROR : Monitor can only be status, uptime, temp or fan\n"
+    printf "ERROR : Monitor can only be status, uptime, atm, attenuation, snr, fec, hec, crc\n"
     exit 1;
     ;;
 esac
