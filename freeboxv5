@@ -48,7 +48,7 @@ Find this plugin on github at http://github.com/d-matt/freebox_munin
 =cut
 
 #MONITOR can only be status, uptime, temp, fan, attenuation, atm or snr
-MONITOR=`basename $0 | sed 's/^freebox_//g'`
+MONITOR=`basename $0 | sed 's/^freeboxv5_//g'`
 
 FREEBOX_URL="http://mafreebox.freebox.fr/pub/fbx_info.txt"
 
