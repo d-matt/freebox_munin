@@ -13,6 +13,7 @@ This plugin monitors various aspects of the freebox server:
  * the ATM synchronization bandwidth
  * the SNR margin
  * the line attenuation
+ * FEC
 
 This plugin uses the following tools: awk, bc, grep, curl
 
@@ -215,6 +216,10 @@ function get_SNR_margin {
   get_page | awk '$1 == "Marge" { down_snr=$4; up_snr=$6; print "snr_down.value", down_snr; print "snr_up.value", up_snr; }'
 }
 
+function get_fec {
+  get_page | awk '$1 == "FEC" { down_fec=$2; up_fec=$3; print "fec_down.value", down_fec; print "fec_up.value", up_fec; }'
+}
+
 
 if [ "$1" = "config" ]; then
   printf "graph_category freebox\n"
@@ -263,6 +268,13 @@ if [ "$1" = "config" ]; then
       printf "snr_up.label SNR margin up\n"
       printf "graph_vlabel SNR margin (dB)\n"
       ;;
+    fec)
+      printf "graph_title Freebox FEC (Up and Down)\n"
+      printf "graph_info This graph shows the FEC of the adsl line of the freebox server.\n"
+      printf "fec_down.label FEC down\n"
+      printf "fec_up.label FEC up\n"
+      printf "graph_vlabel FEC\n"
+      ;;
     *)
       printf "ERROR : Monitor can only be status, uptime, temp or fan\n"
       exit 1;
@@ -289,6 +301,9 @@ case "$MONITOR" in
     ;;
   snr)
     get_SNR_margin
+    ;;
+  fec)
+    get_fec
     ;;
   *)
     printf "ERROR : Monitor can only be status, uptime, temp or fan\n"
