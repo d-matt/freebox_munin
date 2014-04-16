@@ -15,6 +15,7 @@ This plugin monitors various aspects of the freebox server:
  * the line attenuation
  * FEC
  * HEC
+ * CRC
 
 This plugin uses the following tools: awk, bc, grep, curl
 
@@ -225,6 +226,10 @@ function get_hec {
   get_page | awk '$1 == "HEC" { down_hec=$2; up_hec=$3; print "hec_down.value", down_hec; print "hec_up.value", up_hec; }'
 }
 
+function get_crc {
+  get_page | awk '$1 == "CRC" { down_crc=$2; up_crc=$3; print "crc_down.value", down_crc; print "crc_up.value", up_crc; }'
+}
+
 
 if [ "$1" = "config" ]; then
   printf "graph_category freebox\n"
@@ -287,6 +292,13 @@ if [ "$1" = "config" ]; then
       printf "hec_up.label HEC up\n"
       printf "graph_vlabel HEC\n"
       ;;
+    crc)
+      printf "graph_title Freebox CRC (Up and Down)\n"
+      printf "graph_info This graph shows the CRC of the adsl line of the freebox server.\n"
+      printf "crc_down.label CRC down\n"
+      printf "crc_up.label CRC up\n"
+      printf "graph_vlabel CRC\n"
+      ;;
     *)
       printf "ERROR : Monitor can only be status, uptime, temp or fan\n"
       exit 1;
@@ -319,6 +331,9 @@ case "$MONITOR" in
     ;;
   hec)
     get_hec
+    ;;
+  crc)
+    get_crc
     ;;
   *)
     printf "ERROR : Monitor can only be status, uptime, temp or fan\n"
