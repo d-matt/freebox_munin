@@ -21,10 +21,9 @@ This plugin uses the following tools: awk, bc, grep, curl
 
 =head1 CONFIGURATION
 
-For this plugin to work, you need to set the password to the web interface of
-the freebox (http://mafreebox.freebox.fr) in the file /etc/munin/plugin-conf.d/freebox.conf
-    [freebox_*]
-        env.password secret
+For this plugin to work, you need to declare it in the file /etc/munin/plugin-conf.d/munin-node
+    [freeboxv5_*]
+        user nobody
 
 =head1 AUTHOR
 
