@@ -242,6 +242,7 @@ if [ "$1" = "config" ]; then
     status)
       printf "graph_title Freebox $MONITOR\n"
       printf "$MONITOR.label $MONITOR\n"
+      printf "phone.label Phone status\n"
       printf "graph_vlabel $MONITOR\n"
       printf "graph_info This graph shows the status of the freebox server. 1-> Connected, 0-> Disconnected\n"
       printf "$MONITOR.draw AREA\n"
@@ -251,13 +252,6 @@ if [ "$1" = "config" ]; then
       printf "$MONITOR.label $MONITOR\n"
       printf "graph_vlabel $MONITOR\n"
       printf "graph_info This graph shows the uptime of the freebox server.\n"
-      printf "$MONITOR.draw AREA\n"
-      ;;
-    phone)
-      printf "graph_title Freebox phone\n"
-      printf "$MONITOR.label $MONITOR\n"
-      printf "graph_vlabel $MONITOR\n"
-      printf "graph_info This graph shows the status of the phone.\n"
       printf "$MONITOR.draw AREA\n"
       ;;
     atm)
@@ -313,12 +307,10 @@ fi;
 case "$MONITOR" in
   status)
     get_status
+    get_phone_status
     ;;
   uptime)
     get_uptime
-    ;;
-  phone)
-    get_phone_status
     ;;
   atm)
     get_atm_bandwidth
