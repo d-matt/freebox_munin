@@ -16,6 +16,7 @@ This plugin monitors various aspects of the freebox server:
  * FEC
  * HEC
  * CRC
+ * Rates (WiFi, Ethernet, USB, Switch)
 
 This plugin uses the following tools: awk, bc, grep, curl
 
@@ -233,6 +234,17 @@ function get_crc {
   get_page | awk '$1 == "CRC" { down_crc=$2; up_crc=$3; print "crc_down.value", down_crc; print "crc_up.value", up_crc; }'
 }
 
+function get_rates {
+  get_page | awk 'BEGIN{ wan_in=0; wan_out=0; eth_in=0; eth_out=0; usb_in=0; usb_out=0; switch_in=0; switch_out=0; }
+$1 == "WAN" && /ko\/s/ { wan_in=$3; wan_out=$5; }
+$1 == "Ethernet" && /ko\/s/ { eth_in=$3; eth_out=$5; }
+$1 == "USB" && /ko\/s/ { usb_in=$3; usb_out=$5; }
+$1 == "Switch" && /ko\/s/ { switch_in=$3; switch_out=$5; }
+END{ printf "wan_in.value %d\nwan_out.value %d\neth_in.value %d\neth_out.value %d\nusb_in.value %d\nusb_out.value %d\nswitch_in.value %d\nswitch_out.value %d\n",
+             wan_in, wan_out, eth_in, eth_out, usb_in, usb_out, switch_in, switch_out }'
+
+}
+
 
 if [ "$1" = "config" ]; then
   printf "graph_category freebox\n"
@@ -296,6 +308,19 @@ if [ "$1" = "config" ]; then
       printf "crc_up.label CRC up\n"
       printf "graph_vlabel CRC\n"
       ;;
+    rates)
+      printf "graph_title Freebox rates (In and Out)\n"
+      printf "graph_info This graph shows the different rates of the freebox interfaces.\n"
+      printf "wan_in.label WAN in (ko/s)\n"
+      printf "wan_out.label WAN out (ko/s)\n"
+      printf "eth_in.label Ethernet in (ko/s)\n"
+      printf "eth_out.label Ethernet out (ko/s)\n"
+      printf "usb_in.label USB in (ko/s)\n"
+      printf "usb_out.label USB out (ko/s)\n"
+      printf "switch_in.label Switch in (ko/s)\n"
+      printf "switch_out.label Switch out (ko/s)\n"
+      printf "graph_vlabel Rates (ko/s)\n"
+      ;;
     *)
       printf "ERROR : Monitor can only be status, uptime, temp or fan\n"
       exit 1;
@@ -330,8 +355,11 @@ case "$MONITOR" in
   crc)
     get_crc
     ;;
+  rates)
+    get_rates
+    ;;
   *)
-    printf "ERROR : Monitor can only be status, uptime, atm, attenuation, snr, fec, hec, crc\n"
+    printf "ERROR : Monitor can only be status, uptime, atm, attenuation, snr, fec, hec, crc, rates\n" >&2
     exit 1;
     ;;
 esac
