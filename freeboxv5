@@ -63,7 +63,7 @@ function get_page {
   #----------------------------------------------------------------------------
   # This function fetch the page from the freebox web interface.
   #
-  # If the freebox is down, wget will exit with an error code (>0). If so, this
+  # If the freebox is down, curl will exit with an error code (>0). If so, this
   # function will also exit with an error code.
   #----------------------------------------------------------------------------
 
