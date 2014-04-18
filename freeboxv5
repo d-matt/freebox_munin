@@ -103,11 +103,16 @@ function get_status {
 function get_phone_status {
   #----------------------------------------------------------------------------
   # Check the phone status of the freebox :
-  #   - 1, if connected to the internet
+  #   - 1, if handset off
   #   - 0, otherwise
   #
-  # This information is parsed from the settings first tab, in the span with
-  # the id "conn_state".
+  # Example:
+  # Téléphone :
+  # ===========
+  # 
+  #   Etat                           Ok                      
+  #   Etat du combiné                Raccroché               
+  #   Sonnerie                       Inactive                
   #----------------------------------------------------------------------------
   CONN_STATE=$(get_page|awk '/Etat du /{print $4}')
   if [[ ! -z $CONN_STATE && $CONN_STATE == "Raccroché" ]]; then
@@ -121,11 +126,17 @@ function get_phone_status {
 
 function get_uptime {
   #----------------------------------------------------------------------------
-  # Get the uptime of the freebox server.
+  # Get the uptime of the freebox.
   #
-  # This information is parsed from the "Système" tab of the settings page, in
-  # the <span> element after "Allumée depuis :". The format is
-  #   xx jour xx heures xx minutes xx secondes
+  # Example:
+  # Informations générales :
+  # ========================
+  # 
+  #   Modèle                         Freebox ADSL            
+  #   Version du firmware            1.5.20                  
+  #   Mode de connection             Dégroupé                
+  #   Temps depuis la mise en route  6 jours, 0 heure, 11 minutes
+  # 
   #
   # This function outputs the uptime in days
   #----------------------------------------------------------------------------
@@ -158,13 +169,8 @@ function get_atm_bandwidth {
   #----------------------------------------------------------------------------
   # Get the ATM bandwidth in kbit/s.
   #
-  # This information is parsed from the "ADSL > Statistiques" tab from the
-  # following html structure :
-  #
-  #   <tr>
-  #     <th>Débit ATM</th>
-  #     <td>[0-9]+ kbit/s</td>
-  #     <td>[0-9]+ kbit/s</td>
+  # Example:
+  #  Débit ATM              16353 kb/s         1136 kb/s         
   #
   # -> The download value is obained with the first match of "kbit/s" on the
   #    page
@@ -177,19 +183,8 @@ function get_attenuation {
   #----------------------------------------------------------------------------
   # Get the line attenuation in dB.
   #
-  # This information is parsed from the "ADSL > Statistiques" tab from the
-  # following html structure :
-  #
-  #   <tr>
-  #     <th>Atténuation</th>
-  #     <td>[0-9]+ dB</td>
-  #     <td>[0-9]+ dB</td>
-  #   </tr>
-  #   <tr>
-  #     <th>Marge de bruit</th>
-  #     <td>[0-9]+ dB</td>
-  #     <td>[0-9]+ dB</td>
-  #   </tr>
+  # Example:
+  #  Atténuation            31.50 dB           18.30 dB          
   #
   # -> The download value is obained with the first match of "dB" on the
   #    page
@@ -202,19 +197,9 @@ function get_SNR_margin {
   #----------------------------------------------------------------------------
   # Get the SNR margin in dB.
   #
-  # This information is parsed from the "ADSL > Statistiques" tab from the
-  # following html structure :
+  # Example:
+  #  Marge de bruit         4.90 dB            7.40 dB           
   #
-  # <tr>
-  #   <th>Atténuation</th>
-  #   <td>[0-9]+ dB</td>
-  #   <td>[0-9]+ dB</td>
-  # </tr>
-  # <tr>
-  #   <th>Marge de bruit</th>
-  #   <td>[0-9]+ dB</td>
-  #   <td>[0-9]+ dB</td>
-  # </tr>
   # -> The download value is obained with the third match of "dB" on the
   #    page
   # -> The upload value is obtained with the fourth match
@@ -223,18 +208,53 @@ function get_SNR_margin {
 }
 
 function get_fec {
+  #----------------------------------------------------------------------------
+  # Get the FEC values
+  #
+  # Example:
+  #   FEC                    267265             54028             
+  #
+  #----------------------------------------------------------------------------
   get_page | awk '$1 == "FEC" { down_fec=$2; up_fec=$3; print "fec_down.value", down_fec; print "fec_up.value", up_fec; }'
 }
 
 function get_hec {
+  #----------------------------------------------------------------------------
+  # Get the HEC values
+  #
+  # Example:
+  #  HEC                    10                 8371              
+  #
+  #----------------------------------------------------------------------------
   get_page | awk '$1 == "HEC" { down_hec=$2; up_hec=$3; print "hec_down.value", down_hec; print "hec_up.value", up_hec; }'
 }
 
 function get_crc {
+  #----------------------------------------------------------------------------
+  # Get the CRC values
+  #
+  # Example:
+  #  CRC                    177                0                 
+  #
+  #----------------------------------------------------------------------------
   get_page | awk '$1 == "CRC" { down_crc=$2; up_crc=$3; print "crc_down.value", down_crc; print "crc_up.value", up_crc; }'
 }
 
 function get_rates {
+  #----------------------------------------------------------------------------
+  # Get the rates values of various network links
+  #
+  # Example:
+  #  Interfaces réseau :
+  #  -------------------
+  # 
+  #                          Lien           Débit entrant  Débit sortant 
+  #                          --             --             --            
+  #   WAN                    Ok             0 ko/s         0 ko/s        
+  #   Ethernet               100baseTX-FD   0 ko/s         0 ko/s        
+  #   USB                    Non connecté                                
+  #   Switch                 100baseTX-FD   0 ko/s         0 ko/s        
+  #----------------------------------------------------------------------------
   get_page | awk 'BEGIN{ wan_in=0; wan_out=0; eth_in=0; eth_out=0; usb_in=0; usb_out=0; switch_in=0; switch_out=0; }
 $1 == "WAN" && /ko\/s/ { wan_in=$3; wan_out=$5; }
 $1 == "Ethernet" && /ko\/s/ { eth_in=$3; eth_out=$5; }
