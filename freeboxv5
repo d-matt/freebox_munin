@@ -260,7 +260,7 @@ $1 == "WAN" && /ko\/s/ { wan_in=$3; wan_out=$5; }
 $1 == "Ethernet" && /ko\/s/ { eth_in=$3; eth_out=$5; }
 $1 == "USB" && /ko\/s/ { usb_in=$3; usb_out=$5; }
 $1 == "Switch" && /ko\/s/ { switch_in=$3; switch_out=$5; }
-END{ printf "wan_in.value %d\nwan_out.value %d\neth_in.value %d\neth_out.value %d\nusb_in.value %d\nusb_out.value %d\nswitch_in.value %d\nswitch_out.value %d\n",
+END{ printf "wan_in.value %d\nwan_out.value -%d\neth_in.value %d\neth_out.value -%d\nusb_in.value %d\nusb_out.value -%d\nswitch_in.value %d\nswitch_out.value -%d\n",
              wan_in, wan_out, eth_in, eth_out, usb_in, usb_out, switch_in, switch_out }'
 
 }
