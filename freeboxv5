@@ -1,0 +1,386 @@
+#!/bin/bash
+: << =cut
+
+=head1 NAME
+
+Freebox munin plugin to monitor the freebox v6 server (Revolution) from the french ISP free.
+
+=head1 DESCRIPTION
+
+This plugin monitors various aspects of the freebox server:
+ * The connexion status
+ * the uptime
+ * the ATM synchronization bandwidth
+ * the SNR margin
+ * the line attenuation
+ * FEC
+ * HEC
+ * CRC
+ * Rates (WiFi, Ethernet, USB, Switch)
+
+This plugin uses the following tools: awk, bc, grep, curl
+
+=head1 CONFIGURATION
+
+For this plugin to work, you need to declare it in the file /etc/munin/plugin-conf.d/munin-node
+    [freeboxv5_*]
+        user nobody
+
+=head1 AUTHOR
+
+Guilhem Bonnefille <guilhem.bonnefille@gmail.com>
+
+Inspired by:
+* d-matt https://github.com/d-matt/freebox_munin
+* GLR http://glr81.free.fr/blog/index.php?2013/10/12/73-freebox-5-adsl-stats-cacti-templates
+
+=head1 LICENSE
+
+GPLv2
+
+=head1 CONTRIBUTE
+
+Find this plugin on github at http://github.com/d-matt/freebox_munin
+
+=head1 VERSION
+
+    1.0
+
+=head1 CHANGELOG
+
+=head2 1.0 - 2011/11/22
+
+    first release. Works with firmware 1.1.3
+
+=cut
+
+#MONITOR is extracted from file's name
+MONITOR=`basename $0 | sed 's/^freeboxv5_//g'`
+
+FREEBOX_URL="http://mafreebox.freebox.fr/pub/fbx_info.txt"
+
+function get_page {
+  #----------------------------------------------------------------------------
+  # This function fetch the page from the freebox web interface.
+  #
+  # If the freebox is down, curl will exit with an error code (>0). If so, this
+  # function will also exit with an error code.
+  #----------------------------------------------------------------------------
+
+  curl -s $FREEBOX_URL | \
+  iconv -f iso-8859-1 -t utf-8
+
+  # Make sure the connexion is OK.
+  WGET_STATUS=$?
+  if [ $WGET_STATUS -ne 0 ]
+  then
+    # wget had problems.
+    # Stop there, because the freebox is probably offline
+    exit 1
+  fi
+
+}
+
+function get_status {
+  #----------------------------------------------------------------------------
+  # Check the adsl status of the freebox :
+  #   - 1, if connected to the internet
+  #   - 0, otherwise
+  #
+  # This information is parsed from the settings first tab, in the span with
+  # the id "conn_state".
+  #----------------------------------------------------------------------------
+  CONN_STATE=$(get_page|awk '/Etat *Ok/{print $2}/Adsl/{exit}')
+  if [[ ! -z "$CONN_STATE" && "$CONN_STATE" == "Ok" ]]; then
+    CONN_STATE=1;
+  else
+    CONN_STATE=0;
+  fi
+
+  printf "status.value $CONN_STATE\n"
+}
+
+function get_phone_status {
+  #----------------------------------------------------------------------------
+  # Check the phone status of the freebox :
+  #   - 1, if handset off
+  #   - 0, otherwise
+  #
+  # Example:
+  # Téléphone :
+  # ===========
+  # 
+  #   Etat                           Ok                      
+  #   Etat du combiné                Raccroché               
+  #   Sonnerie                       Inactive                
+  #----------------------------------------------------------------------------
+  CONN_STATE=$(get_page|awk '/Etat du /{print $4}')
+  if [[ ! -z $CONN_STATE && $CONN_STATE == "Raccroché" ]]; then
+    CONN_STATE=0;
+  else
+    CONN_STATE=1;
+  fi
+
+  printf "phone.value $CONN_STATE\n"
+}
+
+function get_uptime {
+  #----------------------------------------------------------------------------
+  # Get the uptime of the freebox.
+  #
+  # Example:
+  # Informations générales :
+  # ========================
+  # 
+  #   Modèle                         Freebox ADSL            
+  #   Version du firmware            1.5.20                  
+  #   Mode de connection             Dégroupé                
+  #   Temps depuis la mise en route  6 jours, 0 heure, 11 minutes
+  # 
+  #
+  # This function outputs the uptime in days
+  #----------------------------------------------------------------------------
+  UPTIME=$( get_page | awk '/Temps depuis la mise en route/{print $7, $8, $9, $10, $11, $12}' )
+
+  local DAY=$(echo "$UPTIME" | grep -oP '\K[0-9]+(?= jour)' )
+  local HOU=$(echo "$UPTIME" | grep -oP '\K[0-9]+(?= heure)' )
+  local MIN=$(echo "$UPTIME" | grep -oP '\K[0-9]+(?= minute)' )
+  local SEC=$(echo "$UPTIME" | grep -oP '\K[0-9]+(?= seconde)' )
+
+  if [ -z $DAY ]; then
+    DAY=0
+  fi
+  if [ -z $HOU ]; then
+    HOU=0
+  fi
+  if [ -z $MIN ]; then
+    MIN=0
+  fi
+  if [ -z $SEC ]; then
+    SEC=0
+  fi
+
+  UPTIME=$(echo "scale=2; ($DAY * 86400 + $HOU * 3600 + $MIN * 60 + $SEC) / 86400" |bc)
+
+  printf "uptime.value $UPTIME\n"
+}
+
+function get_atm_bandwidth {
+  #----------------------------------------------------------------------------
+  # Get the ATM bandwidth in kbit/s.
+  #
+  # Example:
+  #  Débit ATM              16353 kb/s         1136 kb/s         
+  #
+  # -> The download value is obained with the first match of "kbit/s" on the
+  #    page
+  # -> The upload value is obtained with the second match
+  #----------------------------------------------------------------------------
+  get_page | awk '$2 == "ATM" { down_atm=$3*1024; up_atm=$5*1024; print "atm_down.value", down_atm; print "atm_up.value", up_atm; }'
+}
+
+function get_attenuation {
+  #----------------------------------------------------------------------------
+  # Get the line attenuation in dB.
+  #
+  # Example:
+  #  Atténuation            31.50 dB           18.30 dB          
+  #
+  # -> The download value is obained with the first match of "dB" on the
+  #    page
+  # -> The upload value is obtained with the second match
+  #----------------------------------------------------------------------------
+  get_page | awk '$1 == "Atténuation" { down_attn=$2; up_attn=$4; print "attenuation_down.value", down_attn; print "attenuation_up.value", up_attn; }'
+}
+
+function get_SNR_margin {
+  #----------------------------------------------------------------------------
+  # Get the SNR margin in dB.
+  #
+  # Example:
+  #  Marge de bruit         4.90 dB            7.40 dB           
+  #
+  # -> The download value is obained with the third match of "dB" on the
+  #    page
+  # -> The upload value is obtained with the fourth match
+  #----------------------------------------------------------------------------
+  get_page | awk '$1 == "Marge" { down_snr=$4; up_snr=$6; print "snr_down.value", down_snr; print "snr_up.value", up_snr; }'
+}
+
+function get_fec {
+  #----------------------------------------------------------------------------
+  # Get the FEC values
+  #
+  # Example:
+  #   FEC                    267265             54028             
+  #
+  #----------------------------------------------------------------------------
+  get_page | awk '$1 == "FEC" { down_fec=$2; up_fec=$3; print "fec_down.value", down_fec; print "fec_up.value", up_fec; }'
+}
+
+function get_hec {
+  #----------------------------------------------------------------------------
+  # Get the HEC values
+  #
+  # Example:
+  #  HEC                    10                 8371              
+  #
+  #----------------------------------------------------------------------------
+  get_page | awk '$1 == "HEC" { down_hec=$2; up_hec=$3; print "hec_down.value", down_hec; print "hec_up.value", up_hec; }'
+}
+
+function get_crc {
+  #----------------------------------------------------------------------------
+  # Get the CRC values
+  #
+  # Example:
+  #  CRC                    177                0                 
+  #
+  #----------------------------------------------------------------------------
+  get_page | awk '$1 == "CRC" { down_crc=$2; up_crc=$3; print "crc_down.value", down_crc; print "crc_up.value", up_crc; }'
+}
+
+function get_rates {
+  #----------------------------------------------------------------------------
+  # Get the rates values of various network links
+  #
+  # Example:
+  #  Interfaces réseau :
+  #  -------------------
+  # 
+  #                          Lien           Débit entrant  Débit sortant 
+  #                          --             --             --            
+  #   WAN                    Ok             0 ko/s         0 ko/s        
+  #   Ethernet               100baseTX-FD   0 ko/s         0 ko/s        
+  #   USB                    Non connecté                                
+  #   Switch                 100baseTX-FD   0 ko/s         0 ko/s        
+  #----------------------------------------------------------------------------
+  get_page | awk 'BEGIN{ wan_in=0; wan_out=0; eth_in=0; eth_out=0; usb_in=0; usb_out=0; switch_in=0; switch_out=0; }
+$1 == "WAN" && /ko\/s/ { wan_in=$3; wan_out=$5; }
+$1 == "Ethernet" && /ko\/s/ { eth_in=$3; eth_out=$5; }
+$1 == "USB" && /ko\/s/ { usb_in=$3; usb_out=$5; }
+$1 == "Switch" && /ko\/s/ { switch_in=$3; switch_out=$5; }
+END{ printf "wan_in.value %d\nwan_out.value -%d\neth_in.value %d\neth_out.value -%d\nusb_in.value %d\nusb_out.value -%d\nswitch_in.value %d\nswitch_out.value -%d\n",
+             wan_in, wan_out, eth_in, eth_out, usb_in, usb_out, switch_in, switch_out }'
+
+}
+
+
+if [ "$1" = "config" ]; then
+  printf "graph_category freebox\n"
+  printf "graph_args --base 1000 -l 0\n"
+
+  case "$MONITOR" in
+    status)
+      printf "graph_title Freebox $MONITOR\n"
+      printf "$MONITOR.label $MONITOR\n"
+      printf "phone.label Phone status\n"
+      printf "graph_vlabel $MONITOR\n"
+      printf "graph_info This graph shows the status of the freebox server. 1-> Connected, 0-> Disconnected\n"
+      printf "$MONITOR.draw AREA\n"
+      ;;
+    uptime)
+      printf "graph_title Freebox $MONITOR in days\n"
+      printf "$MONITOR.label $MONITOR\n"
+      printf "graph_vlabel $MONITOR\n"
+      printf "graph_info This graph shows the uptime of the freebox server.\n"
+      printf "$MONITOR.draw AREA\n"
+      ;;
+    atm)
+      printf "graph_title Freebox ATM Bandwidth (Up and Down)\n"
+      printf "graph_info This graph shows the ATM bandwith of the freebox server.\n"
+      printf "atm_down.label ATM down\n"
+      printf "atm_up.label ATM up\n"
+      printf "graph_vlabel ATM Bandwidth (kbit/s)\n"
+      ;;
+    attenuation)
+      printf "graph_title Freebox Attenuation (Up and Down)\n"
+      printf "graph_info This graph shows the Attenuation of the ADSL line of the freebox server.\n"
+      printf "attenuation_down.label Attenuation down\n"
+      printf "attenuation_up.label Attenuation up\n"
+      printf "graph_vlabel Line attenuation (dB)\n"
+      ;;
+    snr)
+      printf "graph_title Freebox SNR margin (Up and Down)\n"
+      printf "graph_info This graph shows the SNR margin of the adsl line of the freebox server.\n"
+      printf "snr_down.label SNR margin down\n"
+      printf "snr_up.label SNR margin up\n"
+      printf "graph_vlabel SNR margin (dB)\n"
+      ;;
+    fec)
+      printf "graph_title Freebox FEC (Up and Down)\n"
+      printf "graph_info This graph shows the FEC of the adsl line of the freebox server.\n"
+      printf "fec_down.label FEC down\n"
+      printf "fec_up.label FEC up\n"
+      printf "graph_vlabel FEC\n"
+      ;;
+    hec)
+      printf "graph_title Freebox HEC (Up and Down)\n"
+      printf "graph_info This graph shows the HEC of the adsl line of the freebox server.\n"
+      printf "hec_down.label HEC down\n"
+      printf "hec_up.label HEC up\n"
+      printf "graph_vlabel HEC\n"
+      ;;
+    crc)
+      printf "graph_title Freebox CRC (Up and Down)\n"
+      printf "graph_info This graph shows the CRC of the adsl line of the freebox server.\n"
+      printf "crc_down.label CRC down\n"
+      printf "crc_up.label CRC up\n"
+      printf "graph_vlabel CRC\n"
+      ;;
+    rates)
+      printf "graph_title Freebox rates (In and Out)\n"
+      printf "graph_info This graph shows the different rates of the freebox interfaces.\n"
+      printf "wan_in.label WAN in (ko/s)\n"
+      printf "wan_out.label WAN out (ko/s)\n"
+      printf "eth_in.label Ethernet in (ko/s)\n"
+      printf "eth_out.label Ethernet out (ko/s)\n"
+      printf "usb_in.label USB in (ko/s)\n"
+      printf "usb_out.label USB out (ko/s)\n"
+      printf "switch_in.label Switch in (ko/s)\n"
+      printf "switch_out.label Switch out (ko/s)\n"
+      printf "graph_vlabel Rates (ko/s)\n"
+      ;;
+    *)
+      printf "ERROR : Monitor can only be status, uptime, temp or fan\n"
+      exit 1;
+      ;;
+  esac
+  exit 0
+fi;
+
+case "$MONITOR" in
+  status)
+    get_status
+    get_phone_status
+    ;;
+  uptime)
+    get_uptime
+    ;;
+  atm)
+    get_atm_bandwidth
+    ;;
+  attenuation)
+    get_attenuation
+    ;;
+  snr)
+    get_SNR_margin
+    ;;
+  fec)
+    get_fec
+    ;;
+  hec)
+    get_hec
+    ;;
+  crc)
+    get_crc
+    ;;
+  rates)
+    get_rates
+    ;;
+  *)
+    printf "ERROR : Monitor can only be status, uptime, atm, attenuation, snr, fec, hec, crc, rates\n" >&2
+    exit 1;
+    ;;
+esac
+exit 0
