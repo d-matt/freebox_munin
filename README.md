@@ -1,3 +1,5 @@
+> **I don't own a freebox anymore, so I am not able to maintain this script anymore... Please consider vadz work instead (https://github.com/vadz/Munin-Plugin-Freebox)**
+
 A munin plugin to monitor the Freebox
 =====================================
 
